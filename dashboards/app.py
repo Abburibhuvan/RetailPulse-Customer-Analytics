@@ -1,208 +1,340 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
 
 st.set_page_config(
-    page_title="RetailPulse Dashboard",
+    page_title="RetailPulse Customer Analytics Dashboard",
     layout="wide"
 )
 
-st.title("RetailPulse Customer Analytics Dashboard")
-st.markdown("Interactive Retail Business Intelligence Dashboard")
+st.markdown(
+    """
+    <style>
+    .main {
+        background-color: #0E1117;
+        color: white;
+    }
 
-df = pd.read_csv(
-    r"data/cleaned/online_retail_eda_ready_big.csv"
+    h1, h2, h3, h4 {
+        color: white;
+    }
+
+    [data-testid="metric-container"] {
+        background-color: #1E1E1E;
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #333333;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
 )
 
-rfm = pd.read_csv(
-    r"data/cleaned/rfm_clustered_large.csv"
+df = pd.read_csv("data/cleaned/online_retail_eda_ready_big.csv")
+
+df["InvoiceDate"] = pd.to_datetime(df["InvoiceDate"])
+df["YearMonth"] = df["InvoiceDate"].dt.to_period("M").astype(str)
+df["TotalPrice"] = df["Quantity"] * df["UnitPrice"]
+
+st.sidebar.title("Dashboard Navigation")
+
+page = st.sidebar.radio(
+    "Select Section",
+    [
+        "📊 Executive Overview",
+        "📈 Sales Analytics",
+        "👥 Customer Segmentation",
+        "🧠 Customer Clustering",
+        "📦 Product Analytics",
+        "🌍 Country Analysis",
+        "📑 Project Summary"
+    ]
 )
 
-st.sidebar.header("Dashboard Filters")
+country_list = ["All"] + sorted(df["Country"].dropna().unique())
 
 selected_country = st.sidebar.selectbox(
     "Select Country",
-    options=["All"] + list(df["Country"].unique())
+    country_list
 )
-
-filtered_df = df.copy()
 
 if selected_country != "All":
-    filtered_df = filtered_df[
-        filtered_df["Country"] == selected_country
-    ]
+    df = df[df["Country"] == selected_country]
 
-total_revenue = filtered_df["TotalPrice"].sum()
-total_customers = filtered_df["CustomerID"].nunique()
-total_orders = filtered_df["InvoiceNo"].nunique()
-avg_order_value = total_revenue / total_orders
+if page == "📊 Executive Overview":
+    st.title("RetailPulse Customer Analytics Dashboard")
 
-col1, col2, col3, col4 = st.columns(4)
+    st.markdown("Interactive AI-Powered Retail Business Intelligence Dashboard")
 
-col1.metric(
-    "Total Revenue",
-    f"${total_revenue:,.0f}"
-)
+    total_revenue = df["TotalPrice"].sum()
+    total_customers = df["CustomerID"].nunique()
+    total_orders = df["InvoiceNo"].nunique()
+    avg_order_value = total_revenue / total_orders
 
-col2.metric(
-    "Total Customers",
-    f"{total_customers:,}"
-)
+    col1, col2, col3, col4 = st.columns(4)
 
-col3.metric(
-    "Total Orders",
-    f"{total_orders:,}"
-)
+    col1.metric("Total Revenue", f"${total_revenue:,.0f}")
+    col2.metric("Total Customers", f"{total_customers:,}")
+    col3.metric("Total Orders", f"{total_orders:,}")
+    col4.metric("Average Order Value", f"${avg_order_value:,.2f}")
 
-col4.metric(
-    "Average Order Value",
-    f"${avg_order_value:,.2f}"
-)
+    st.markdown("---")
+    st.subheader("Monthly Revenue Trend")
 
-tab1, tab2, tab3 = st.tabs([
-    "Sales Analytics",
-    "Customer Segmentation",
-    "Machine Learning"
-])
-
-with tab1:
-
-    st.header("Monthly Revenue Trend")
-
-    monthly_revenue = filtered_df.groupby(
-        "MonthName"
-    )["TotalPrice"].sum()
-
-    month_order = [
-        "January",
-        "February",
-        "March",
-        "April",
-        "May",
-        "June",
-        "July",
-        "August",
-        "September",
-        "October",
-        "November",
-        "December"
-    ]
-
-    monthly_revenue = monthly_revenue.reindex(month_order)
+    monthly_revenue = df.groupby("YearMonth")["TotalPrice"].sum()
 
     fig, ax = plt.subplots(figsize=(12, 5))
-
-    ax.plot(
-        monthly_revenue.index,
-        monthly_revenue.values,
-        marker="o"
-    )
-
-    ax.set_title("Monthly Revenue Trend")
+    monthly_revenue.plot(marker="o", ax=ax)
     ax.set_xlabel("Month")
     ax.set_ylabel("Revenue")
 
-    plt.xticks(rotation=45)
-
     st.pyplot(fig)
 
-    st.header("Top 10 Products by Revenue")
+elif page == "📈 Sales Analytics":
+    st.title("Sales Analytics")
 
-    top_products = filtered_df.groupby(
-        "Description"
-    )["TotalPrice"].sum().sort_values(
-        ascending=False
-    ).head(10)
+    st.subheader("Top 10 Products by Revenue")
 
-    fig, ax = plt.subplots(figsize=(12, 6))
-
-    ax.barh(
-        top_products.index,
-        top_products.values
+    top_products = (
+        df.groupby("Description")["TotalPrice"]
+        .sum()
+        .sort_values(ascending=False)
+        .head(10)
     )
 
-    ax.set_title("Top 10 Products by Revenue")
+    fig, ax = plt.subplots(figsize=(12, 6))
+    top_products.sort_values().plot(kind="barh", ax=ax)
     ax.set_xlabel("Revenue")
     ax.set_ylabel("Product")
 
-    ax.invert_yaxis()
-
     st.pyplot(fig)
 
-with tab2:
+    st.subheader("Daily Revenue Trend")
 
-    st.header("Customer Segment Distribution")
+    daily_revenue = (
+        df.groupby(df["InvoiceDate"].dt.date)["TotalPrice"]
+        .sum()
+    )
+
+    fig2, ax2 = plt.subplots(figsize=(12, 5))
+    daily_revenue.plot(ax=ax2)
+    ax2.set_xlabel("Date")
+    ax2.set_ylabel("Revenue")
+
+    st.pyplot(fig2)
+
+elif page == "👥 Customer Segmentation":
+    st.title("Customer Segmentation using RFM Analysis")
+
+    snapshot_date = df["InvoiceDate"].max() + pd.Timedelta(days=1)
+
+    rfm = df.groupby("CustomerID").agg({
+        "InvoiceDate": lambda x: (snapshot_date - x.max()).days,
+        "InvoiceNo": "count",
+        "TotalPrice": "sum"
+    })
+
+    rfm.columns = ["Recency", "Frequency", "Monetary"]
+
+    rfm["R_Score"] = pd.qcut(
+        rfm["Recency"],
+        4,
+        labels=[4, 3, 2, 1]
+    )
+
+    rfm["F_Score"] = pd.qcut(
+        rfm["Frequency"].rank(method="first"),
+        4,
+        labels=[1, 2, 3, 4]
+    )
+
+    rfm["M_Score"] = pd.qcut(
+        rfm["Monetary"],
+        4,
+        labels=[1, 2, 3, 4]
+    )
+
+    rfm["RFM_Score"] = (
+        rfm["R_Score"].astype(str)
+        + rfm["F_Score"].astype(str)
+        + rfm["M_Score"].astype(str)
+    )
+
+    def segment_customer(row):
+        if row["RFM_Score"] == "444":
+            return "Champion"
+        elif row["F_Score"] == 4:
+            return "Loyal Customer"
+        elif row["M_Score"] == 4:
+            return "Big Spender"
+        elif row["R_Score"] == 1:
+            return "Lost Customer"
+        elif row["R_Score"] == 2:
+            return "At Risk"
+        else:
+            return "Others"
+
+    rfm["Segment"] = rfm.apply(segment_customer, axis=1)
 
     segment_counts = rfm["Segment"].value_counts()
 
-    fig, ax = plt.subplots(figsize=(10, 5))
+    st.subheader("Customer Count by Segment")
 
-    ax.bar(
-        segment_counts.index,
-        segment_counts.values
+    fig3, ax3 = plt.subplots(figsize=(10, 5))
+    segment_counts.plot(kind="bar", ax=ax3)
+    ax3.set_xlabel("Segment")
+    ax3.set_ylabel("Customers")
+
+    st.pyplot(fig3)
+
+    st.subheader("Revenue Contribution by Segment")
+
+    segment_revenue = (
+        rfm.groupby("Segment")["Monetary"]
+        .sum()
+        .sort_values(ascending=False)
     )
 
-    ax.set_title("Customer Count by Segment")
-    ax.set_xlabel("Segment")
-    ax.set_ylabel("Number of Customers")
+    fig4, ax4 = plt.subplots(figsize=(10, 5))
+    segment_revenue.plot(kind="bar", ax=ax4)
+    ax4.set_xlabel("Segment")
+    ax4.set_ylabel("Revenue")
 
-    plt.xticks(rotation=15)
+    st.pyplot(fig4)
 
-    st.pyplot(fig)
+elif page == "🧠 Customer Clustering":
+    st.title("Customer Clustering using KMeans")
 
-    st.header("Revenue Contribution by Segment")
+    snapshot_date = df["InvoiceDate"].max() + pd.Timedelta(days=1)
 
-    segment_revenue = rfm.groupby(
-        "Segment"
-    )["Monetary"].sum().sort_values(
-        ascending=False
+    rfm = df.groupby("CustomerID").agg({
+        "InvoiceDate": lambda x: (snapshot_date - x.max()).days,
+        "InvoiceNo": "count",
+        "TotalPrice": "sum"
+    })
+
+    rfm.columns = ["Recency", "Frequency", "Monetary"]
+
+    scaler = StandardScaler()
+    rfm_scaled = scaler.fit_transform(rfm)
+
+    kmeans = KMeans(
+        n_clusters=4,
+        random_state=42
     )
 
-    fig, ax = plt.subplots(figsize=(10, 5))
+    rfm["Cluster"] = kmeans.fit_predict(rfm_scaled)
 
-    ax.bar(
-        segment_revenue.index,
-        segment_revenue.values
+    st.subheader("Cluster Distribution")
+    st.write(rfm["Cluster"].value_counts())
+
+    st.subheader("Cluster Scatter Plot")
+
+    fig5, ax5 = plt.subplots(figsize=(12, 6))
+    sns.scatterplot(
+        x="Frequency",
+        y="Monetary",
+        hue="Cluster",
+        data=rfm,
+        palette="Set2",
+        ax=ax5
     )
 
-    ax.set_title("Revenue Contribution by Segment")
-    ax.set_xlabel("Segment")
-    ax.set_ylabel("Revenue")
+    st.pyplot(fig5)
 
-    plt.xticks(rotation=15)
+elif page == "📦 Product Analytics":
+    st.title("Product Analytics")
 
-    st.pyplot(fig)
+    st.subheader("Top 10 Products by Quantity Sold")
 
-with tab3:
-
-    st.header("Customer Clusters")
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-
-    scatter = ax.scatter(
-        rfm["Frequency"],
-        rfm["Monetary"],
-        c=rfm["Cluster"]
+    top_quantity = (
+        df.groupby("Description")["Quantity"]
+        .sum()
+        .sort_values(ascending=False)
+        .head(10)
     )
 
-    ax.set_title("Customer Clusters")
-    ax.set_xlabel("Frequency")
-    ax.set_ylabel("Monetary")
+    fig6, ax6 = plt.subplots(figsize=(12, 6))
+    top_quantity.sort_values().plot(kind="barh", ax=ax6)
+    ax6.set_xlabel("Quantity Sold")
+    ax6.set_ylabel("Product")
 
-    st.pyplot(fig)
+    st.pyplot(fig6)
 
-country_revenue = filtered_df.groupby(
-    "Country"
-)["TotalPrice"].sum().sort_values(
-    ascending=False
-).head(10)
+    st.subheader("Top 10 Products by Revenue")
 
-csv = filtered_df.to_csv(index=False)
+    top_revenue = (
+        df.groupby("Description")["TotalPrice"]
+        .sum()
+        .sort_values(ascending=False)
+        .head(10)
+    )
 
-st.download_button(
-    label="Download Filtered Data",
-    data=csv,
-    file_name="filtered_data.csv",
-    mime="text/csv"
-)
+    fig7, ax7 = plt.subplots(figsize=(12, 6))
+    top_revenue.sort_values().plot(kind="barh", ax=ax7)
+    ax7.set_xlabel("Revenue")
+    ax7.set_ylabel("Product")
+
+    st.pyplot(fig7)
+
+elif page == "🌍 Country Analysis":
+    st.title("Country Wise Analysis")
+
+    country_revenue = (
+        df.groupby("Country")["TotalPrice"]
+        .sum()
+        .sort_values(ascending=False)
+        .head(10)
+    )
+
+    st.subheader("Top Countries by Revenue")
+
+    fig8, ax8 = plt.subplots(figsize=(12, 6))
+    country_revenue.sort_values().plot(kind="barh", ax=ax8)
+    ax8.set_xlabel("Revenue")
+    ax8.set_ylabel("Country")
+
+    st.pyplot(fig8)
+
+elif page == "📑 Project Summary":
+    st.title("Project Summary")
+
+    st.markdown(
+        """
+        ## RetailPulse Customer Analytics Dashboard
+
+        This project is an end-to-end Retail Analytics and Business Intelligence platform built using Python and Streamlit.
+
+        ### Features
+
+        - Executive KPI Dashboard
+        - Sales Analytics
+        - Customer Segmentation using RFM
+        - Customer Clustering using KMeans
+        - Product Analytics
+        - Country-wise Revenue Analysis
+        - Interactive Filtering
+
+        ### Technologies Used
+
+        - Python
+        - Pandas
+        - NumPy
+        - Matplotlib
+        - Seaborn
+        - Scikit-learn
+        - Streamlit
+
+        ### Business Benefits
+
+        - Identify high-value customers
+        - Track revenue trends
+        - Improve customer retention
+        - Analyze product performance
+        - Support business decision making
+        """
+    )
