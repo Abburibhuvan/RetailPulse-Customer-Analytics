@@ -12,11 +12,11 @@ st.title("RetailPulse Customer Analytics Dashboard")
 st.markdown("Interactive Retail Business Intelligence Dashboard")
 
 df = pd.read_csv(
-    r"data\cleaned\online_retail_eda_ready_big.csv"
+    r"data/cleaned/online_retail_eda_ready_big.csv"
 )
 
 rfm = pd.read_csv(
-    r"data\cleaned\rfm_clustered_large.csv"
+    r"data/cleaned/rfm_clustered_large.csv"
 )
 
 st.sidebar.header("Dashboard Filters")
